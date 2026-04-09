@@ -1,0 +1,89 @@
+from datetime import datetime
+import requests
+import os
+
+# 🌊 Beach coordinates
+BEACH_COORDS = {
+    "tel aviv": (32.0853, 34.7818),
+    "herzliya": (32.1624, 34.8445),
+    "haifa": (32.7940, 34.9896),
+    "ashdod": (31.8044, 34.6502),
+    "netanya": (32.3328, 34.8600),
+    "habonim": (32.6390, 34.9210)
+}
+
+# 🌊 Stormglass API key from environment variable
+STORMGLASS_API_KEY = os.getenv("STORMGLASS_API_KEY")
+
+
+
+def get_surf_forecast(beach="tel aviv", days=1):
+    try:
+        lat, lng = BEACH_COORDS.get(beach.lower(), BEACH_COORDS["tel aviv"])
+        url = "https://api.stormglass.io/v2/weather/point"
+
+        params = {
+            "lat": lat,
+            "lng": lng,
+            "params": "waveHeight,windSpeed,windDirection,wavePeriod",
+            "hours": 24 * days
+        }
+
+        headers = {
+            "Authorization": STORMGLASS_API_KEY
+        }
+
+        response = requests.get(url, params=params, headers=headers)
+        data = response.json()
+
+        if "hours" not in data:
+            return f"❌ Surf API error:\n{data}"
+
+        hours = data["hours"]
+
+        # PERIOD: start → end
+        start_date = datetime.fromisoformat(hours[0]["time"].replace("Z", ""))
+        end_date = datetime.fromisoformat(hours[(24*days)-1]["time"].replace("Z", ""))
+
+        report = f"🌊 Surf forecast for {beach.title()}\n"
+        report += f"📅 Period: {start_date.strftime('%d %b %Y')} → {end_date.strftime('%d %b %Y')}\n\n"
+
+        # LOOP every 6 hours
+        for hour in hours[:24*days:6]:
+            dt = datetime.fromisoformat(hour["time"].replace("Z", ""))
+            day_name = dt.strftime("%A")
+            date_str = dt.strftime("%d %b")
+            time_str = dt.strftime("%H:%M")
+            wave = hour["waveHeight"]["noaa"]
+            wind = hour["windSpeed"]["noaa"]
+            period = hour["wavePeriod"]["noaa"] if "wavePeriod" in hour and "noaa" in hour["wavePeriod"] else None
+
+            report += (
+                f"{day_name} {date_str} {time_str}\n"
+                f"   🌊 Wave: {wave:.1f}m"
+            )
+            if period:
+                report += f" | Period: {period:.1f}s\n"
+            else:
+                report += "\n"
+
+            report += f"   💨 Wind: {wind:.1f} m/s\n\n"
+
+        # Surf rating (first day average)
+        first_day = hours[:24]
+        avg_wave = sum(h["waveHeight"]["noaa"] for h in first_day) / 24
+        if avg_wave < 0.4:
+            rating = "Flat 😢"
+        elif avg_wave < 0.8:
+            rating = "Beginner 🟢"
+        elif avg_wave < 1.4:
+            rating = "Fun 🟡"
+        else:
+            rating = "Great 🔥"
+
+        report += f"🏄 Surf rating: {rating}"
+
+        return report
+
+    except Exception as e:
+        return f"❌ Surf tool crashed:\n{str(e)}"

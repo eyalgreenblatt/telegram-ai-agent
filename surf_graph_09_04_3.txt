@@ -1,0 +1,101 @@
+import matplotlib.pyplot as plt
+import pandas as pd
+import numpy as np
+from datetime import datetime
+from scipy.interpolate import make_interp_spline
+
+# 🟢🟡🔴 surf scoring
+def surf_score(wave, wind):
+    if 0.7 <= wave <= 1.8 and wind < 6:
+        return "good"
+    elif wave >= 0.5 and wind < 9:
+        return "ok"
+    else:
+        return "bad"
+
+def create_wave_graph(hours, beach):
+    times = []
+    waves = []
+    winds = []
+    periods = []
+    scores = []
+
+    for h in hours:
+        dt = datetime.fromisoformat(h["time"].replace("Z",""))
+        wave = h["waveHeight"]["noaa"]
+        wind = h["windSpeed"]["noaa"]
+        period = h["wavePeriod"]["noaa"]
+
+        times.append(dt)
+        waves.append(wave)
+        winds.append(wind)
+        periods.append(period)
+        scores.append(surf_score(wave, wind))
+
+    df = pd.DataFrame({
+        "time": times,
+        "waves": waves,
+        "wind": winds,
+        "period": periods,
+        "score": scores
+    })
+
+    # reduce density
+    df = df.iloc[::3]
+
+    labels = [t.strftime("%d/%m") for t in df["time"]]
+
+    # 🌊 Smooth wave curve (spline)
+    x = np.arange(len(df))
+    y = df["waves"].values
+    spline = make_interp_spline(x, y, k=3)
+    x_smooth = np.linspace(x.min(), x.max(), 300)
+    y_smooth = spline(x_smooth)
+
+    plt.figure(figsize=(12,6))
+    ax1 = plt.gca()
+
+    # 🌈 Fill color based on average surf score
+    avg_wave = df["waves"].mean()
+    avg_wind = df["wind"].mean()
+    score = surf_score(avg_wave, avg_wind)
+
+    if score == "good":
+        fill_color = "#7CFC8A"   # green
+        title_score = "🟢 GOOD SURF"
+    elif score == "ok":
+        fill_color = "#FFE066"   # yellow
+        title_score = "🟡 OK SURF"
+    else:
+        fill_color = "#FF7B7B"   # red
+        title_score = "🔴 POOR SURF"
+
+    # 🌊 Wave curve + fill
+    ax1.plot(x_smooth, y_smooth, linewidth=3)
+    ax1.fill_between(x_smooth, y_smooth, alpha=0.25)
+
+    ax1.set_xticks(x)
+    ax1.set_xticklabels(labels, rotation=45)
+    ax1.set_ylabel("Wave height (m)", fontsize=12)
+
+    # 💨 Wind line (secondary axis)
+    ax2 = ax1.twinx()
+    ax2.plot(x, df["wind"], linestyle="--", linewidth=2)
+    ax2.set_ylabel("Wind (m/s)", fontsize=12)
+
+    avg_period = df["period"].mean()
+
+    plt.title(
+        f"{beach.title()} Surf Forecast\n{title_score}  |  Avg period: {avg_period:.1f}s",
+        fontsize=16,
+        pad=20
+    )
+
+    ax1.grid(True, linestyle="--", alpha=0.3)
+    plt.tight_layout()
+
+    filename = f"{beach}_surf.png"
+    plt.savefig(filename, dpi=140)
+    plt.close()
+
+    return filename

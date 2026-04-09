@@ -1,0 +1,33 @@
+import matplotlib.pyplot as plt
+import pandas as pd
+from datetime import datetime
+
+def create_wave_graph(hours, beach):
+    times = []
+    waves = []
+    winds = []
+
+    for h in hours:
+        dt = datetime.fromisoformat(h["time"].replace("Z", ""))
+        times.append(dt)
+        waves.append(h["waveHeight"]["noaa"])
+        winds.append(h["windSpeed"]["noaa"])
+
+    df = pd.DataFrame({
+        "time": times,
+        "waves": waves,
+        "wind": winds
+    })
+
+    plt.figure(figsize=(10,5))
+    plt.plot(df["time"], df["waves"], label="Wave height (m)")
+    plt.plot(df["time"], df["wind"], label="Wind (m/s)")
+    plt.title(f"Surf Forecast – {beach.title()}")
+    plt.legend()
+    plt.grid(True)
+
+    filename = f"{beach}_surf.png"
+    plt.savefig(filename)
+    plt.close()
+
+    return filename

@@ -1,0 +1,137 @@
+import os
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from dotenv import load_dotenv
+from agent import agent_decide
+import json
+
+from stocks import get_stock_price
+from stocks_news import get_stock_news
+
+from surf_tools import get_surf_forecast
+from surf_graph import create_wave_graph
+from voice_tools import transcribe_voice
+
+load_dotenv()
+
+WATCHLIST = {}
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "👋 Stock AI Agent ready!\n"
+        "/add AAPL\n"
+        "/price AAPL\n"
+        "/news Tesla\n"
+        "/ask anything"
+    )
+
+# bot.py
+from telegram import Update
+from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
+
+
+
+
+
+
+async def add_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    symbol = context.args[0].upper()
+    user = update.effective_user.id
+    WATCHLIST.setdefault(user, []).append(symbol)
+    await update.message.reply_text(f"Added {symbol} to watchlist 📈")
+
+async def price(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    symbol = context.args[0].upper()
+    price = get_stock_price(symbol)
+    await update.message.reply_text(f"{symbol} price: ${price}")
+
+async def news(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    company = " ".join(context.args)
+    news = get_stock_news(company)
+    await update.message.reply_text(news)
+
+async def ask(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    question = " ".join(context.args)
+    answer = ask_claude(question)
+    await update.message.reply_text(answer)
+
+async def ai_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_text = update.message.text.lower()
+    watchlist = context.bot_data.get("watchlist", [])
+
+    await update.message.reply_text("🤖 Thinking...")
+
+    try:
+        # 🌊 SURF SKILL TRIGGER
+        if "surf" in user_text or "wave" in user_text or "גל" in user_text:
+            beach = "habonim" if "habonim" in user_text or "הבונים" in user_text else "tel aviv"
+            days = 7 if "7" in user_text else 1
+            lang = "he" if "גל" in user_text else "en"
+
+            report, hours = get_surf_forecast(beach, days, lang)
+            graph = create_wave_graph(hours, beach)
+
+            await update.message.reply_text(report)
+
+            with open(graph, "rb") as img:
+                await update.message.reply_photo(img)
+
+            return
+
+        # 🤖 CLAUDE AGENT (fallback for stocks/chat)
+        decision = agent_decide(user_text, watchlist)
+        await update.message.reply_text(decision)
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+
+        await update.message.reply_text(
+            f"🚨 BOT ERROR:\n{str(e)}"
+        )
+
+
+# 🎤 VOICE MESSAGE HANDLER (Hebrew speech → text)
+async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        await update.message.reply_text("🎤 מקשיב להודעה הקולית...")
+
+        file = await context.bot.get_file(update.message.voice.file_id)
+        await file.download_to_drive("voice.ogg")
+
+        # convert speech → text
+        text = transcribe_voice("voice.ogg")
+        print("User said:", text)
+
+        # reuse same surf logic
+        beach = "habonim" if "הבונים" in text else "tel aviv"
+        report, hours = get_surf_forecast(beach, 7, "he")
+        graph = create_wave_graph(hours, beach)
+
+        await update.message.reply_text(report)
+
+        with open(graph, "rb") as img:
+            await update.message.reply_photo(img)
+
+    except Exception as e:
+        await update.message.reply_text(f"Voice error: {e}")
+
+
+def main():
+    app = ApplicationBuilder().token(os.getenv("TELEGRAM_TOKEN")).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("add", add_stock))
+    app.add_handler(CommandHandler("price", price))
+    app.add_handler(CommandHandler("news", news))
+    from telegram.ext import MessageHandler, filters
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, ai_chat))
+    app.add_handler(MessageHandler(filters.VOICE, handle_voice))
+
+
+
+
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,51 @@
+import matplotlib.pyplot as plt
+import pandas as pd
+from datetime import datetime
+
+def create_wave_graph(hours, beach):
+    times = []
+    waves = []
+    winds = []
+
+    for h in hours:
+        dt = datetime.fromisoformat(h["time"].replace("Z", ""))
+        times.append(dt)
+        waves.append(h["waveHeight"]["noaa"])
+        winds.append(h["windSpeed"]["noaa"])
+
+    df = pd.DataFrame({
+        "time": times,
+        "waves": waves,
+        "wind": winds
+    })
+
+    # take only 3-hour steps for readability
+    df = df.iloc[::3]
+
+    # format dates → DD/MM
+    labels = [t.strftime("%d/%m") for t in df["time"]]
+
+    # 🌊 PRO GRAPH STYLE
+    plt.figure(figsize=(12,6))
+    ax1 = plt.gca()
+
+    # Wave line
+    ax1.plot(labels, df["waves"], linewidth=3)
+    ax1.set_ylabel("Wave height (m)", fontsize=12)
+    ax1.set_title(f"Surf Forecast – {beach.title()}", fontsize=16, pad=20)
+
+    # Wind line on second axis
+    ax2 = ax1.twinx()
+    ax2.plot(labels, df["wind"], linestyle="--", linewidth=2)
+    ax2.set_ylabel("Wind speed (m/s)", fontsize=12)
+
+    # styling
+    ax1.grid(True, linestyle="--", alpha=0.4)
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+
+    filename = f"{beach}_surf.png"
+    plt.savefig(filename, dpi=120)
+    plt.close()
+
+    return filename
