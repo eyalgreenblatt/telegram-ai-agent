@@ -1,10 +1,5 @@
 python-telegram-bot==21.0.1
-anthropic
-requests
-python-dotenv
-pydub
-openai-whisper
-matplotlib
-pandas
-numpy
-scipy
+anthropic==0.93.0
+python-dotenv==1.0.1
+requests==2.31.0
+pandas==2.2.2
