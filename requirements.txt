@@ -1,9 +1,10 @@
-python-telegram-bot==20.7
+python-telegram-bot==21.0.1
+anthropic
 requests
 python-dotenv
-pandas
+pydub
+openai-whisper
 matplotlib
+pandas
 numpy
 scipy
-pydub
-pytest
